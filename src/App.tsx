@@ -13,10 +13,14 @@ import {
   School,
   SchoolType,
   OfstedRating,
+  HeatMapLayerType,
+  DistrictMetricsMap,
   SCHOOL_TYPES,
   OFSTED_RATINGS,
 } from "./types";
 import schoolsData from "./data/schools.json";
+import { HeatMapLayer } from "./components/HeatMapLayer";
+import { LayerControls } from "./components/LayerControls";
 
 // Fix Leaflet default marker icon
 import iconUrl from "leaflet/dist/images/marker-icon.png";
@@ -174,9 +178,48 @@ export default function App() {
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [mapZoom, setMapZoom] = useState<number | null>(null);
 
+  // Heat map layer state
+  const [heatMapLayer, setHeatMapLayer] = useState<HeatMapLayerType>("none");
+  const [geojsonData, setGeojsonData] =
+    useState<GeoJSON.FeatureCollection | null>(null);
+  const [districtMetrics, setDistrictMetrics] = useState<DistrictMetricsMap>(
+    {}
+  );
+
   useEffect(() => {
     // Simulate brief loading for data
     setLoading(false);
+  }, []);
+
+  // Load GeoJSON and metrics data when heat map layer is enabled
+  useEffect(() => {
+    if (heatMapLayer === "none") return;
+
+    // Load GeoJSON boundaries if not already loaded
+    if (!geojsonData) {
+      import("./data/postcode-districts.json")
+        .then((module) => {
+          setGeojsonData(module.default as GeoJSON.FeatureCollection);
+        })
+        .catch((err) => {
+          console.error("Failed to load postcode districts:", err);
+        });
+    }
+
+    // Load district metrics if not already loaded
+    if (Object.keys(districtMetrics).length === 0) {
+      import("./data/district-metrics.json")
+        .then((module) => {
+          setDistrictMetrics(module.default as DistrictMetricsMap);
+        })
+        .catch((err) => {
+          console.error("Failed to load district metrics:", err);
+        });
+    }
+  }, [heatMapLayer, geojsonData, districtMetrics]);
+
+  const handleLayerChange = useCallback((layer: HeatMapLayerType) => {
+    setHeatMapLayer(layer);
   }, []);
 
   // Filter schools based on criteria
@@ -258,6 +301,11 @@ export default function App() {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        <HeatMapLayer
+          layerType={heatMapLayer}
+          geojsonData={geojsonData}
+          metrics={districtMetrics}
+        />
         <MarkerClusterGroup
           schools={filteredSchools}
           highlightedUrn={highlightedUrn}
@@ -267,6 +315,12 @@ export default function App() {
       </MapContainer>
 
       <div className="control-panel">
+        {/* Layer Controls */}
+        <LayerControls
+          selectedLayer={heatMapLayer}
+          onLayerChange={handleLayerChange}
+        />
+
         {/* Search */}
         <div className="search-container">
           <input

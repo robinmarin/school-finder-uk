@@ -42,3 +42,34 @@ export const OFSTED_RATINGS: OfstedRating[] = [
   "Inadequate",
   "Not yet inspected",
 ];
+
+// Heat map layer types
+export type HeatMapLayerType = "none" | "house-prices" | "commute-time";
+
+export interface DistrictMetrics {
+  medianPrice: number | null;
+  commuteMinutes: number | null;
+}
+
+export type DistrictMetricsMap = Record<string, DistrictMetrics>;
+
+export interface ColorScaleConfig {
+  min: number;
+  max: number;
+  colors: string[];
+  noDataColor: string;
+}
+
+export const HOUSE_PRICE_SCALE: ColorScaleConfig = {
+  min: 100000,
+  max: 1500000,
+  colors: ["#ffffb2", "#41b6c4", "#253494"], // Yellow → Teal → Dark Blue
+  noDataColor: "#cccccc",
+};
+
+export const COMMUTE_TIME_SCALE: ColorScaleConfig = {
+  min: 20,
+  max: 180,
+  colors: ["#1a9850", "#ffffbf", "#d73027"], // Green → Yellow → Red
+  noDataColor: "#cccccc",
+};
