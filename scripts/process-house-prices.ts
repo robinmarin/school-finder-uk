@@ -15,32 +15,13 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { parse } from "csv-parse/sync";
+import * as readline from "readline";
 
 const INPUT_PATH = path.join(import.meta.dirname, "../data/price-paid-data.csv");
 const OUTPUT_PATH = path.join(
   import.meta.dirname,
   "../src/data/district-metrics.json"
 );
-
-interface PricePaidRecord {
-  transactionId: string;
-  price: number;
-  dateOfTransfer: string;
-  postcode: string;
-  propertyType: string;
-  oldNew: string;
-  duration: string;
-  paon: string;
-  saon: string;
-  street: string;
-  locality: string;
-  townCity: string;
-  district: string;
-  county: string;
-  ppd: string;
-  recordStatus: string;
-}
 
 interface DistrictMetrics {
   medianPrice: number | null;
@@ -72,6 +53,34 @@ function calculateMedian(values: number[]): number {
   return sorted[mid];
 }
 
+function parseCSVLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        // Escaped quote
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      fields.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  fields.push(current);
+
+  return fields;
+}
+
 async function main() {
   // Check if input file exists
   if (!fs.existsSync(INPUT_PATH)) {
@@ -98,21 +107,7 @@ async function main() {
     return;
   }
 
-  console.log("Reading price paid data...");
-  const fileContent = fs.readFileSync(INPUT_PATH, "utf-8");
-
-  // Price Paid Data CSV has no headers, columns are:
-  // Transaction unique identifier, Price, Date of Transfer, Postcode,
-  // Property Type, Old/New, Duration, PAON, SAON, Street, Locality,
-  // Town/City, District, County, PPD Category Type, Record Status
-  const records = parse(fileContent, {
-    columns: false,
-    skip_empty_lines: true,
-    relax_quotes: true,
-    relax_column_count: true,
-  }) as string[][];
-
-  console.log(`Processing ${records.length.toLocaleString()} transactions...`);
+  console.log("Processing price paid data (streaming)...");
 
   // Group prices by postcode district
   const pricesByDistrict: Map<string, number[]> = new Map();
@@ -123,11 +118,36 @@ async function main() {
 
   let processed = 0;
   let skipped = 0;
+  let lineCount = 0;
 
-  for (const record of records) {
-    const price = parseInt(record[1], 10);
-    const dateStr = record[2]; // Format: YYYY-MM-DD HH:MM
-    const postcode = record[3];
+  // Stream the file line by line
+  const fileStream = fs.createReadStream(INPUT_PATH, { encoding: "utf-8" });
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity,
+  });
+
+  for await (const line of rl) {
+    lineCount++;
+
+    if (lineCount % 1000000 === 0) {
+      console.log(`  Processed ${(lineCount / 1000000).toFixed(0)}M lines...`);
+    }
+
+    // Price Paid Data CSV has no headers, columns are:
+    // Transaction unique identifier, Price, Date of Transfer, Postcode,
+    // Property Type, Old/New, Duration, PAON, SAON, Street, Locality,
+    // Town/City, District, County, PPD Category Type, Record Status
+    const fields = parseCSVLine(line);
+
+    if (fields.length < 4) {
+      skipped++;
+      continue;
+    }
+
+    const price = parseInt(fields[1], 10);
+    const dateStr = fields[2]; // Format: YYYY-MM-DD HH:MM
+    const postcode = fields[3];
 
     // Skip invalid records
     if (!postcode || isNaN(price) || price <= 0) {
@@ -184,13 +204,15 @@ async function main() {
     .map((m) => m.medianPrice)
     .filter((p): p is number => p !== null);
 
-  console.log("");
-  console.log("Statistics:");
-  console.log(`  Min median price: £${Math.min(...medianPrices).toLocaleString()}`);
-  console.log(`  Max median price: £${Math.max(...medianPrices).toLocaleString()}`);
-  console.log(
-    `  Overall median: £${calculateMedian(medianPrices).toLocaleString()}`
-  );
+  if (medianPrices.length > 0) {
+    console.log("");
+    console.log("Statistics:");
+    console.log(`  Min median price: £${Math.min(...medianPrices).toLocaleString()}`);
+    console.log(`  Max median price: £${Math.max(...medianPrices).toLocaleString()}`);
+    console.log(
+      `  Overall median: £${calculateMedian(medianPrices).toLocaleString()}`
+    );
+  }
 }
 
 main().catch(console.error);

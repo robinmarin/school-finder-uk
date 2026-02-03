@@ -1,4 +1,64 @@
-import { ColorScaleConfig } from "../types";
+import { ColorScaleConfig, DistrictMetricsMap, HeatMapLayerType } from "../types";
+
+/**
+ * Calculate a dynamic color scale based on visible district values.
+ * Uses percentiles to avoid outliers skewing the scale.
+ */
+export function calculateDynamicScale(
+  visibleDistricts: string[],
+  metrics: DistrictMetricsMap,
+  layerType: HeatMapLayerType,
+  baseScale: ColorScaleConfig
+): ColorScaleConfig {
+  if (layerType === "none" || visibleDistricts.length === 0) {
+    return baseScale;
+  }
+
+  // Collect all non-null values from visible districts
+  const values: number[] = [];
+  for (const district of visibleDistricts) {
+    const districtMetrics = metrics[district];
+    if (!districtMetrics) continue;
+
+    const value =
+      layerType === "house-prices"
+        ? districtMetrics.medianPrice
+        : districtMetrics.commuteMinutes;
+
+    if (value !== null) {
+      values.push(value);
+    }
+  }
+
+  // Need at least 3 data points to calculate a meaningful scale
+  if (values.length < 3) {
+    return baseScale;
+  }
+
+  // Sort values to calculate percentiles
+  values.sort((a, b) => a - b);
+
+  // Use 5th and 95th percentile to avoid outliers
+  const p5Index = Math.floor(values.length * 0.05);
+  const p95Index = Math.min(Math.floor(values.length * 0.95), values.length - 1);
+
+  const min = values[p5Index];
+  const max = values[p95Index];
+
+  // Ensure we have a meaningful range (at least 10% of base scale range)
+  const baseRange = baseScale.max - baseScale.min;
+  const dynamicRange = max - min;
+
+  if (dynamicRange < baseRange * 0.1) {
+    return baseScale;
+  }
+
+  return {
+    ...baseScale,
+    min,
+    max,
+  };
+}
 
 /**
  * Interpolate between colors based on a value within a range.

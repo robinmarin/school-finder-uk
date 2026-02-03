@@ -10,6 +10,7 @@ import { formatLegendValue } from "../utils/colorScales";
 interface LayerControlsProps {
   selectedLayer: HeatMapLayerType;
   onLayerChange: (layer: HeatMapLayerType) => void;
+  dynamicScale?: ColorScaleConfig | null;
 }
 
 const LAYER_OPTIONS: { value: HeatMapLayerType; label: string }[] = [
@@ -43,7 +44,19 @@ function GradientLegend({
 function LayerControlsComponent({
   selectedLayer,
   onLayerChange,
+  dynamicScale,
 }: LayerControlsProps) {
+  // Use dynamic scale if provided, otherwise fall back to default scales
+  const housePriceScale =
+    selectedLayer === "house-prices" && dynamicScale
+      ? dynamicScale
+      : HOUSE_PRICE_SCALE;
+
+  const commuteTimeScale =
+    selectedLayer === "commute-time" && dynamicScale
+      ? dynamicScale
+      : COMMUTE_TIME_SCALE;
+
   return (
     <div className="layer-controls">
       <div className="layer-controls-title">Map Overlays</div>
@@ -63,11 +76,11 @@ function LayerControlsComponent({
       </div>
 
       {selectedLayer === "house-prices" && (
-        <GradientLegend scale={HOUSE_PRICE_SCALE} layerType="house-prices" />
+        <GradientLegend scale={housePriceScale} layerType="house-prices" />
       )}
 
       {selectedLayer === "commute-time" && (
-        <GradientLegend scale={COMMUTE_TIME_SCALE} layerType="commute-time" />
+        <GradientLegend scale={commuteTimeScale} layerType="commute-time" />
       )}
     </div>
   );

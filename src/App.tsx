@@ -15,6 +15,7 @@ import {
   OfstedRating,
   HeatMapLayerType,
   DistrictMetricsMap,
+  ColorScaleConfig,
   SCHOOL_TYPES,
   OFSTED_RATINGS,
 } from "./types";
@@ -185,6 +186,9 @@ export default function App() {
   const [districtMetrics, setDistrictMetrics] = useState<DistrictMetricsMap>(
     {}
   );
+  const [dynamicScale, setDynamicScale] = useState<ColorScaleConfig | null>(
+    null
+  );
 
   useEffect(() => {
     // Simulate brief loading for data
@@ -220,6 +224,11 @@ export default function App() {
 
   const handleLayerChange = useCallback((layer: HeatMapLayerType) => {
     setHeatMapLayer(layer);
+    setDynamicScale(null); // Reset scale when layer changes
+  }, []);
+
+  const handleScaleChange = useCallback((scale: ColorScaleConfig | null) => {
+    setDynamicScale(scale);
   }, []);
 
   // Filter schools based on criteria
@@ -305,6 +314,7 @@ export default function App() {
           layerType={heatMapLayer}
           geojsonData={geojsonData}
           metrics={districtMetrics}
+          onScaleChange={handleScaleChange}
         />
         <MarkerClusterGroup
           schools={filteredSchools}
@@ -319,6 +329,7 @@ export default function App() {
         <LayerControls
           selectedLayer={heatMapLayer}
           onLayerChange={handleLayerChange}
+          dynamicScale={dynamicScale}
         />
 
         {/* Search */}
