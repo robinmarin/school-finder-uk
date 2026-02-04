@@ -23,6 +23,13 @@ done
 echo "=== School Finder UK - Data Setup ==="
 echo ""
 
+# Install dependencies if needed
+if [ ! -d "node_modules" ]; then
+  echo "Installing dependencies..."
+  npm install
+  echo ""
+fi
+
 # Create data directory
 mkdir -p data
 
