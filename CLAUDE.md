@@ -37,21 +37,14 @@ data/                # Raw data files (not in git)
 
 ## Common Tasks
 
-### Update School Data
+### Initial Setup / Update All Data
 
 ```bash
-# Download fresh GIAS data
-curl -o data/edubase_raw.csv "http://ea-edubase-api-prod.azurewebsites.net/edubase/edubasealldata$(date +%Y%m%d).csv"
-
-# Convert encoding
-iconv -f ISO-8859-1 -t UTF-8 data/edubase_raw.csv > data/edubase_utf8.csv
-
-# Download Ofsted data
-curl -L -o data/ofsted_school_level.csv "https://explore-education-statistics.service.gov.uk/data-catalogue/data-set/c0c08e6d-c3ef-4408-8193-dcc493b7fa59/csv"
-
-# Process
-npm run process-data
+npm run setup                      # Download everything (~4.5GB for house prices)
+npm run setup -- --skip-house-prices  # Skip the large house price download
 ```
+
+This downloads GIAS schools, Ofsted ratings, house prices, and postcode boundaries, then processes everything.
 
 ### Run Development Server
 

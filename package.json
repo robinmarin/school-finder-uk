@@ -7,11 +7,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "setup": "./scripts/setup-data.sh",
     "process-data": "tsx scripts/process-data.ts",
     "process-boundaries": "tsx scripts/process-boundaries.ts",
     "process-house-prices": "tsx scripts/process-house-prices.ts",
-    "process-commute-times": "tsx scripts/process-commute-times.ts",
-    "process-heatmap": "npm run process-boundaries && npm run process-house-prices && npm run process-commute-times"
+    "process-commute-times": "tsx scripts/process-commute-times.ts"
   },
   "repository": {
     "type": "git",
