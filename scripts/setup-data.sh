@@ -28,11 +28,38 @@ mkdir -p data
 
 # 1. Download GIAS (schools) data
 echo "[1/4] Downloading GIAS school data..."
-DATE=$(date +%Y%m%d)
-curl -f -o data/edubase_raw.csv \
-  "http://ea-edubase-api-prod.azurewebsites.net/edubase/edubasealldata${DATE}.csv" \
-  || curl -f -o data/edubase_raw.csv \
-  "http://ea-edubase-api-prod.azurewebsites.net/edubase/edubasealldata$(date -v-1d +%Y%m%d 2>/dev/null || date -d 'yesterday' +%Y%m%d).csv"
+
+# Helper to get date N days ago (works on both macOS and Linux)
+get_date_days_ago() {
+  local days=$1
+  date -v-${days}d +%Y%m%d 2>/dev/null || date -d "$days days ago" +%Y%m%d
+}
+
+# Try downloading from today going back up to 7 days
+GIAS_DOWNLOADED=false
+for days_ago in 0 1 2 3 4 5 6 7; do
+  DATE=$(get_date_days_ago $days_ago)
+  URL="http://ea-edubase-api-prod.azurewebsites.net/edubase/edubasealldata${DATE}.csv"
+  echo "  Trying date $DATE..."
+
+  if curl -s -f -o data/edubase_raw.csv "$URL"; then
+    # Check file has actual content (should be at least 1MB for valid data)
+    FILE_SIZE=$(wc -c < data/edubase_raw.csv | tr -d ' ')
+    if [ "$FILE_SIZE" -gt 1000000 ]; then
+      echo "  Success! Downloaded $(( FILE_SIZE / 1024 / 1024 ))MB"
+      GIAS_DOWNLOADED=true
+      break
+    else
+      echo "  File too small (${FILE_SIZE} bytes), trying earlier date..."
+    fi
+  fi
+done
+
+if [ "$GIAS_DOWNLOADED" = false ]; then
+  echo "  ERROR: Could not download GIAS data from the last 7 days."
+  echo "  Please check https://get-information-schools.service.gov.uk/ for data availability."
+  exit 1
+fi
 
 echo "  Converting encoding..."
 iconv -f ISO-8859-1 -t UTF-8 data/edubase_raw.csv > data/edubase_utf8.csv
