@@ -1,6 +1,6 @@
 # Primary Schools in England - Interactive Map
 
-An interactive map visualization of all ~16,700 primary schools in England with search and filter capabilities.
+An interactive map visualization of all ~16,700 primary schools in England with search, filter, and heatmap overlay capabilities.
 
 ## Features
 
@@ -8,23 +8,35 @@ An interactive map visualization of all ~16,700 primary schools in England with 
 - **Search** by school name or postcode with autocomplete
 - **Filter** by school type (Academy, Community School, Foundation School, Voluntary Aided, Voluntary Controlled, Free School)
 - **Filter** by Ofsted rating (Outstanding, Good, Requires Improvement, Inadequate, Not yet inspected)
-- **Real-time updates** - filters apply instantly, no "apply" button needed
+- **Heatmap overlays**:
+  - House prices by postcode district (median prices from Land Registry)
+  - Commute time to London (estimated travel time)
+  - Dynamic rescaling - color scale adjusts based on visible area when zooming
 - **Click markers** to see school details (name, type, Ofsted rating, address)
 - **Smooth animations** when zooming to search results
 
-## How to Run
+## Quick Start
 
 ### Prerequisites
 
 - Node.js 18+ and npm
 
-### Quick Start
+### Setup
 
 ```bash
 # Install dependencies
 npm install
 
-# Start development server
+# Download and process all data
+npm run setup
+
+# Or skip the large (~4.5GB) house price download
+npm run setup -- --skip-house-prices
+```
+
+### Development
+
+```bash
 npm run dev
 ```
 
@@ -39,54 +51,14 @@ npm run preview
 
 ## Data Sources
 
-### School Data
+| Data | Source | Size |
+|------|--------|------|
+| Schools | [GIAS (Get Information about Schools)](https://get-information-schools.service.gov.uk/) | ~52K records |
+| Ofsted ratings | [Explore Education Statistics](https://explore-education-statistics.service.gov.uk/) | ~30K records |
+| House prices | [HM Land Registry Price Paid](https://www.gov.uk/government/statistical-data-sets/price-paid-data-downloads) | ~4.5GB |
+| Postcode boundaries | [UK Postcode Polygons](https://github.com/missinglink/uk-postcode-polygons) | ~2.7K districts |
 
-Downloaded from the UK Government's **Get Information about Schools (GIAS)** service:
-- URL: `http://ea-edubase-api-prod.azurewebsites.net/edubase/edubasealldata[YYYYMMDD].csv`
-- This data is updated daily and contains all educational establishments in England
-- Documentation: https://get-information-schools.service.gov.uk/
-
-### Ofsted Ratings
-
-Downloaded from **Explore Education Statistics**:
-- Dataset: "Quality of school places - Ofsted Rating at school level"
-- URL: https://explore-education-statistics.service.gov.uk/data-catalogue/data-set/c0c08e6d-c3ef-4408-8193-dcc493b7fa59
-
-## Data Processing Steps
-
-1. **Download** the full GIAS establishments CSV (~52,000 records)
-2. **Convert encoding** from ISO-8859-1 to UTF-8
-3. **Filter** to only include schools where:
-   - `PhaseOfEducation` = "Primary"
-   - `EstablishmentStatus` = "Open" or "Open, but proposed to close"
-4. **Convert coordinates** from British National Grid (EPSG:27700) to WGS84 (EPSG:4326) using proj4
-5. **Join** with Ofsted data using URN (Unique Reference Number)
-6. **Normalize** school types into 6 main categories:
-   - Academy (includes converter, sponsor led, special)
-   - Community School
-   - Foundation School
-   - Voluntary Aided
-   - Voluntary Controlled
-   - Free School (includes studio schools, UTCs)
-7. **Export** to JSON for the web app
-
-### Reprocessing Data
-
-To update the data with a fresh download:
-
-```bash
-# Download latest GIAS data (replace date)
-curl -o data/edubase_raw.csv "http://ea-edubase-api-prod.azurewebsites.net/edubase/edubasealldata$(date +%Y%m%d).csv"
-
-# Convert encoding
-iconv -f ISO-8859-1 -t UTF-8 data/edubase_raw.csv > data/edubase_utf8.csv
-
-# Download latest Ofsted data
-curl -L -o data/ofsted_school_level.csv "https://explore-education-statistics.service.gov.uk/data-catalogue/data-set/c0c08e6d-c3ef-4408-8193-dcc493b7fa59/csv"
-
-# Run processing script
-npm run process-data
-```
+All data is sourced from UK Government Open Data under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
 
 ## Technical Stack
 
@@ -98,43 +70,21 @@ npm run process-data
 - **leaflet.markercluster** - Efficient clustering for large marker sets
 - **proj4** - Coordinate transformation
 
-## Data Statistics
+## Data Processing
 
-After processing:
-- **Total schools**: 16,707
+The setup script (`npm run setup`) handles:
 
-### By Type
-| Type | Count |
-|------|-------|
-| Academy | 7,883 |
-| Community School | 4,798 |
-| Voluntary Aided | 1,917 |
-| Voluntary Controlled | 1,350 |
-| Foundation School | 463 |
-| Free School | 296 |
-
-### By Ofsted Rating
-| Rating | Count |
-|--------|-------|
-| Good | 11,149 |
-| Outstanding | 2,342 |
-| Not yet inspected | 2,154 |
-| Requires Improvement | 1,003 |
-| Inadequate | 59 |
+1. **School data**: Downloads GIAS CSV, converts from ISO-8859-1 to UTF-8, filters to open primary schools, converts coordinates from British National Grid to WGS84, joins with Ofsted ratings
+2. **Postcode boundaries**: Fetches GeoJSON from GitHub, simplifies polygons for performance
+3. **Commute times**: Calculates estimated travel time to central London based on distance
+4. **House prices**: Streams the large Land Registry CSV, calculates median price per postcode district from last 2 years of transactions
 
 ## Caveats
 
-1. **Ofsted data timing**: The Ofsted ratings dataset may not reflect the most recent inspections. Schools with recent inspections may show as "Not yet inspected" if the data hasn't been updated.
+1. **Ofsted data timing**: Ratings may not reflect the most recent inspections.
 
-2. **"Not yet inspected"**: This category includes:
-   - Genuinely new schools not yet inspected
-   - Schools where the URN couldn't be matched between datasets
-   - Schools with ratings not in our normalization map
+2. **"Not yet inspected"**: Includes new schools, URN mismatches, and unmapped rating types.
 
-3. **Coordinate accuracy**: Coordinates are derived from Easting/Northing in the GIAS data. A small number of schools may have slightly inaccurate positions.
+3. **House prices**: Based on Land Registry transactions from the last 2 years. Some districts may have no data.
 
-4. **School type categorization**: Schools are mapped to 6 main categories for filtering. Some specialized types (e.g., "Other independent school") are excluded from the main filters.
-
-## License
-
-Data sourced from UK Government Open Data under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
+4. **Commute times**: Estimated based on distance to London, not actual transit routes. Useful for relative comparison only.
