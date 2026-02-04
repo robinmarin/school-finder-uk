@@ -36,13 +36,14 @@ get_date_days_ago() {
 }
 
 # Try downloading from today going back up to 7 days
+# Note: GIAS typically only keeps the latest file, older dates return 500 errors
 GIAS_DOWNLOADED=false
 for days_ago in 0 1 2 3 4 5 6 7; do
   DATE=$(get_date_days_ago $days_ago)
-  URL="http://ea-edubase-api-prod.azurewebsites.net/edubase/edubasealldata${DATE}.csv"
+  URL="https://ea-edubase-api-prod.azurewebsites.net/edubase/edubasealldata${DATE}.csv"
   echo "  Trying date $DATE..."
 
-  if curl -s -f -o data/edubase_raw.csv "$URL"; then
+  if curl -sL -f -o data/edubase_raw.csv "$URL"; then
     # Check file has actual content (should be at least 1MB for valid data)
     FILE_SIZE=$(wc -c < data/edubase_raw.csv | tr -d ' ')
     if [ "$FILE_SIZE" -gt 1000000 ]; then
@@ -57,6 +58,7 @@ done
 
 if [ "$GIAS_DOWNLOADED" = false ]; then
   echo "  ERROR: Could not download GIAS data from the last 7 days."
+  echo "  The GIAS API typically only keeps the latest file available."
   echo "  Please check https://get-information-schools.service.gov.uk/ for data availability."
   exit 1
 fi
