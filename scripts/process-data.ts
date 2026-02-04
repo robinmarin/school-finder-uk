@@ -13,8 +13,12 @@ interface RawSchool {
   URN: string;
   "EstablishmentName": string;
   "TypeOfEstablishment (name)": string;
+  "EstablishmentTypeGroup (name)": string;
   "EstablishmentStatus (name)": string;
   "PhaseOfEducation (name)": string;
+  "AdmissionsPolicy (name)": string;
+  "StatutoryLowAge": string;
+  "StatutoryHighAge": string;
   Easting: string;
   Northing: string;
   Street: string;
@@ -34,6 +38,9 @@ interface ProcessedSchool {
   urn: string;
   name: string;
   type: string;
+  phase: string;
+  funding: string;
+  admissions: string;
   status: string;
   lat: number;
   lng: number;
@@ -42,7 +49,12 @@ interface ProcessedSchool {
   ofsted: string;
 }
 
-function normalizeSchoolType(type: string): string {
+function normalizeSchoolType(type: string, typeGroup: string): string {
+  // Handle independent schools
+  if (typeGroup === "Independent schools") {
+    return "Independent";
+  }
+
   // Map various school types to our filter categories
   const typeMap: Record<string, string> = {
     "Academy converter": "Academy",
@@ -62,6 +74,57 @@ function normalizeSchoolType(type: string): string {
     "University technical college": "Free School",
   };
   return typeMap[type] || "Other";
+}
+
+function getFundingType(typeGroup: string): string {
+  if (typeGroup === "Independent schools") {
+    return "Independent";
+  }
+  return "State";
+}
+
+function normalizeAdmissionsPolicy(policy: string): string {
+  if (policy === "Selective") {
+    return "Selective";
+  }
+  if (policy === "Non-selective") {
+    return "Non-selective";
+  }
+  return "Not applicable";
+}
+
+function derivePhaseFromAge(lowAge: string, highAge: string, explicitPhase: string): string | null {
+  // If explicit phase is Primary or Secondary, use it
+  if (explicitPhase === "Primary" || explicitPhase === "Secondary") {
+    return explicitPhase;
+  }
+
+  // For independent schools, derive from age range
+  const low = parseInt(lowAge, 10);
+  const high = parseInt(highAge, 10);
+
+  if (isNaN(low) || isNaN(high)) {
+    return null;
+  }
+
+  // Primary: typically ages 4-11
+  // Secondary: typically ages 11-18
+  // If school covers both, categorize by where most of their range falls
+
+  if (high <= 11) {
+    return "Primary";
+  }
+  if (low >= 11) {
+    return "Secondary";
+  }
+
+  // All-through schools: categorize based on emphasis
+  // If they start at primary age (4-7), consider primary
+  // If they start at secondary age (11+), consider secondary
+  if (low <= 7) {
+    return "Primary";
+  }
+  return "Secondary";
 }
 
 function normalizeOfstedRating(rating: string): string {
@@ -100,16 +163,37 @@ async function processData() {
 
   console.log(`Total records: ${giasRecords.length}`);
 
-  // Filter for primary schools that are open
-  const primarySchools = giasRecords.filter((school) => {
+  // Filter for schools that are open and either:
+  // 1. Have Primary or Secondary phase explicitly set
+  // 2. Are independent schools (we'll derive phase from age)
+  const validPhases = ["Primary", "Secondary"];
+  const filteredSchools = giasRecords.filter((school) => {
     const phase = school["PhaseOfEducation (name)"];
     const status = school["EstablishmentStatus (name)"];
-    return (
-      phase === "Primary" && (status === "Open" || status === "Open, but proposed to close")
-    );
+    const typeGroup = school["EstablishmentTypeGroup (name)"];
+
+    const isOpen = status === "Open" || status === "Open, but proposed to close";
+    if (!isOpen) return false;
+
+    // Include if explicit Primary/Secondary phase
+    if (validPhases.includes(phase)) {
+      return true;
+    }
+
+    // Include independent schools (we'll derive phase from age range)
+    if (typeGroup === "Independent schools") {
+      const derivedPhase = derivePhaseFromAge(
+        school["StatutoryLowAge"],
+        school["StatutoryHighAge"],
+        phase
+      );
+      return derivedPhase !== null;
+    }
+
+    return false;
   });
 
-  console.log(`Primary schools: ${primarySchools.length}`);
+  console.log(`Filtered schools: ${filteredSchools.length}`);
 
   // Read Ofsted data
   console.log("Reading Ofsted data...");
@@ -133,7 +217,7 @@ async function processData() {
   let skippedNoCoords = 0;
   let skippedInvalidCoords = 0;
 
-  for (const school of primarySchools) {
+  for (const school of filteredSchools) {
     const easting = parseFloat(school.Easting);
     const northing = parseFloat(school.Northing);
 
@@ -157,12 +241,28 @@ async function processData() {
         continue;
       }
 
+      const typeGroup = school["EstablishmentTypeGroup (name)"];
+      const phase = derivePhaseFromAge(
+        school["StatutoryLowAge"],
+        school["StatutoryHighAge"],
+        school["PhaseOfEducation (name)"]
+      );
+
+      // Skip if we couldn't determine the phase
+      if (!phase) {
+        skippedInvalidCoords++;
+        continue;
+      }
+
       const ofstedRating = ofstedMap.get(school.URN) || "";
 
       processedSchools.push({
         urn: school.URN,
         name: school.EstablishmentName,
-        type: normalizeSchoolType(school["TypeOfEstablishment (name)"]),
+        type: normalizeSchoolType(school["TypeOfEstablishment (name)"], typeGroup),
+        phase,
+        funding: getFundingType(typeGroup),
+        admissions: normalizeAdmissionsPolicy(school["AdmissionsPolicy (name)"]),
         status: school["EstablishmentStatus (name)"],
         lat: Math.round(lat * 1000000) / 1000000, // 6 decimal places
         lng: Math.round(lng * 1000000) / 1000000,
@@ -181,15 +281,36 @@ async function processData() {
 
   // Generate statistics
   const typeStats = new Map<string, number>();
+  const phaseStats = new Map<string, number>();
+  const fundingStats = new Map<string, number>();
+  const admissionsStats = new Map<string, number>();
   const ofstedStats = new Map<string, number>();
   for (const school of processedSchools) {
     typeStats.set(school.type, (typeStats.get(school.type) || 0) + 1);
+    phaseStats.set(school.phase, (phaseStats.get(school.phase) || 0) + 1);
+    fundingStats.set(school.funding, (fundingStats.get(school.funding) || 0) + 1);
+    admissionsStats.set(school.admissions, (admissionsStats.get(school.admissions) || 0) + 1);
     ofstedStats.set(school.ofsted, (ofstedStats.get(school.ofsted) || 0) + 1);
   }
 
   console.log("\nSchool types:");
   for (const [type, count] of typeStats.entries()) {
     console.log(`  ${type}: ${count}`);
+  }
+
+  console.log("\nPhase:");
+  for (const [phase, count] of phaseStats.entries()) {
+    console.log(`  ${phase}: ${count}`);
+  }
+
+  console.log("\nFunding:");
+  for (const [funding, count] of fundingStats.entries()) {
+    console.log(`  ${funding}: ${count}`);
+  }
+
+  console.log("\nAdmissions:");
+  for (const [admissions, count] of admissionsStats.entries()) {
+    console.log(`  ${admissions}: ${count}`);
   }
 
   console.log("\nOfsted ratings:");

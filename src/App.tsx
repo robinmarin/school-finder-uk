@@ -12,11 +12,17 @@ import "leaflet.markercluster";
 import {
   School,
   SchoolType,
+  PhaseOfEducation,
+  FundingType,
+  AdmissionsPolicy,
   OfstedRating,
   HeatMapLayerType,
   DistrictMetricsMap,
   ColorScaleConfig,
   SCHOOL_TYPES,
+  PHASES,
+  FUNDING_TYPES,
+  ADMISSIONS_POLICIES,
   OFSTED_RATINGS,
 } from "./types";
 import schoolsData from "./data/schools.json";
@@ -60,6 +66,9 @@ const highlightedIcon = new L.Icon({
 
 interface Filters {
   types: Set<SchoolType>;
+  phases: Set<PhaseOfEducation>;
+  funding: Set<FundingType>;
+  admissions: Set<AdmissionsPolicy>;
   ofsted: Set<OfstedRating>;
 }
 
@@ -102,10 +111,13 @@ function MarkerClusterGroup({
       });
 
       const ofstedClass = getOfstedClass(school.ofsted);
+      const isGrammar = school.admissions === "Selective";
+      const fundingLabel = school.funding === "Independent" ? "Independent" : school.type;
       marker.bindPopup(`
         <div class="school-popup">
           <h3>${escapeHtml(school.name)}</h3>
-          <p><span class="label">Type:</span> ${escapeHtml(school.type)}</p>
+          <p><span class="label">Phase:</span> ${escapeHtml(school.phase)}${isGrammar ? ' <span class="grammar-badge">Grammar</span>' : ''}</p>
+          <p><span class="label">Type:</span> ${escapeHtml(fundingLabel)}</p>
           <p><span class="label">Ofsted:</span> <span class="ofsted-badge ${ofstedClass}">${escapeHtml(school.ofsted)}</span></p>
           <p><span class="label">Address:</span> ${escapeHtml(school.address)}</p>
           <p><span class="label">Postcode:</span> ${escapeHtml(school.postcode)}</p>
@@ -173,6 +185,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<Filters>({
     types: new Set(SCHOOL_TYPES),
+    phases: new Set(PHASES),
+    funding: new Set(FUNDING_TYPES),
+    admissions: new Set(ADMISSIONS_POLICIES),
     ofsted: new Set(OFSTED_RATINGS),
   });
   const [highlightedUrn, setHighlightedUrn] = useState<string | null>(null);
@@ -235,8 +250,11 @@ export default function App() {
   const filteredSchools = useMemo(() => {
     return schools.filter((school) => {
       const typeMatch = filters.types.has(school.type as SchoolType);
+      const phaseMatch = filters.phases.has(school.phase as PhaseOfEducation);
+      const fundingMatch = filters.funding.has(school.funding as FundingType);
+      const admissionsMatch = filters.admissions.has(school.admissions as AdmissionsPolicy);
       const ofstedMatch = filters.ofsted.has(school.ofsted as OfstedRating);
-      return typeMatch && ofstedMatch;
+      return typeMatch && phaseMatch && fundingMatch && admissionsMatch && ofstedMatch;
     });
   }, [schools, filters]);
 
@@ -262,6 +280,42 @@ export default function App() {
         newTypes.delete(type);
       }
       return { ...prev, types: newTypes };
+    });
+  }, []);
+
+  const handlePhaseFilter = useCallback((phase: PhaseOfEducation, checked: boolean) => {
+    setFilters((prev) => {
+      const newPhases = new Set(prev.phases);
+      if (checked) {
+        newPhases.add(phase);
+      } else {
+        newPhases.delete(phase);
+      }
+      return { ...prev, phases: newPhases };
+    });
+  }, []);
+
+  const handleFundingFilter = useCallback((funding: FundingType, checked: boolean) => {
+    setFilters((prev) => {
+      const newFunding = new Set(prev.funding);
+      if (checked) {
+        newFunding.add(funding);
+      } else {
+        newFunding.delete(funding);
+      }
+      return { ...prev, funding: newFunding };
+    });
+  }, []);
+
+  const handleAdmissionsFilter = useCallback((admissions: AdmissionsPolicy, checked: boolean) => {
+    setFilters((prev) => {
+      const newAdmissions = new Set(prev.admissions);
+      if (checked) {
+        newAdmissions.add(admissions);
+      } else {
+        newAdmissions.delete(admissions);
+      }
+      return { ...prev, admissions: newAdmissions };
     });
   }, []);
 
@@ -351,7 +405,7 @@ export default function App() {
                 >
                   <div className="search-result-name">{school.name}</div>
                   <div className="search-result-meta">
-                    {school.postcode} • {school.type} • {school.ofsted}
+                    {school.postcode} • {school.phase} • {school.funding}{school.admissions === "Selective" ? " (Grammar)" : ""} • {school.ofsted}
                   </div>
                 </div>
               ))}
@@ -361,6 +415,54 @@ export default function App() {
 
         {/* Filters */}
         <div className="filter-panel">
+          <div className="filter-section">
+            <div className="filter-section-title">Phase</div>
+            <div className="filter-options">
+              {PHASES.map((phase) => (
+                <label key={phase} className="filter-option">
+                  <input
+                    type="checkbox"
+                    checked={filters.phases.has(phase)}
+                    onChange={(e) => handlePhaseFilter(phase, e.target.checked)}
+                  />
+                  {phase}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="filter-section">
+            <div className="filter-section-title">Funding</div>
+            <div className="filter-options">
+              {FUNDING_TYPES.map((funding) => (
+                <label key={funding} className="filter-option">
+                  <input
+                    type="checkbox"
+                    checked={filters.funding.has(funding)}
+                    onChange={(e) => handleFundingFilter(funding, e.target.checked)}
+                  />
+                  {funding}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="filter-section">
+            <div className="filter-section-title">Admissions</div>
+            <div className="filter-options">
+              {ADMISSIONS_POLICIES.map((admissions) => (
+                <label key={admissions} className="filter-option">
+                  <input
+                    type="checkbox"
+                    checked={filters.admissions.has(admissions)}
+                    onChange={(e) => handleAdmissionsFilter(admissions, e.target.checked)}
+                  />
+                  {admissions === "Selective" ? "Selective (Grammar)" : admissions}
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="filter-section">
             <div className="filter-section-title">School Type</div>
             <div className="filter-options">

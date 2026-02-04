@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Interactive map of primary schools in England (~16,700 schools) with search, filters, and heatmap overlays for house prices and commute times.
+Interactive map of schools in England (~21,500 primary, secondary, state, and independent schools) with search, filters, and heatmap overlays for house prices and commute times.
 
 ## Architecture
 
@@ -82,3 +82,7 @@ npm run build
 - `src/components/HeatMapLayer.tsx:36-117` - Dynamic scale calculation and map event handling
 - `src/utils/colorScales.ts:7-63` - `calculateDynamicScale()` percentile-based rescaling
 - `scripts/process-house-prices.ts` - Streaming CSV parser for large files
+
+## Git
+
+Don't mention Claude in commit messages.

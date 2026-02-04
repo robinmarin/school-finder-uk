@@ -1,7 +1,16 @@
+export type PhaseOfEducation = "Primary" | "Secondary";
+
+export type FundingType = "State" | "Independent";
+
+export type AdmissionsPolicy = "Selective" | "Non-selective" | "Not applicable";
+
 export interface School {
   urn: string;
   name: string;
   type: SchoolType;
+  phase: PhaseOfEducation;
+  funding: FundingType;
+  admissions: AdmissionsPolicy;
   status: string;
   lat: number;
   lng: number;
@@ -17,6 +26,7 @@ export type SchoolType =
   | "Voluntary Aided"
   | "Voluntary Controlled"
   | "Free School"
+  | "Independent"
   | "Other";
 
 export type OfstedRating =
@@ -33,6 +43,7 @@ export const SCHOOL_TYPES: SchoolType[] = [
   "Voluntary Aided",
   "Voluntary Controlled",
   "Free School",
+  "Independent",
 ];
 
 export const OFSTED_RATINGS: OfstedRating[] = [
@@ -42,6 +53,12 @@ export const OFSTED_RATINGS: OfstedRating[] = [
   "Inadequate",
   "Not yet inspected",
 ];
+
+export const PHASES: PhaseOfEducation[] = ["Primary", "Secondary"];
+
+export const FUNDING_TYPES: FundingType[] = ["State", "Independent"];
+
+export const ADMISSIONS_POLICIES: AdmissionsPolicy[] = ["Selective", "Non-selective", "Not applicable"];
 
 // Heat map layer types
 export type HeatMapLayerType = "none" | "house-prices" | "commute-time";
